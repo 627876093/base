@@ -1,0 +1,95 @@
+package com.liglig.base.base
+
+import android.content.pm.ActivityInfo
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.LayoutInflater
+import androidx.appcompat.app.AppCompatActivity
+import androidx.databinding.DataBindingUtil
+import androidx.databinding.ViewDataBinding
+import androidx.lifecycle.*
+import com.gyf.immersionbar.ImmersionBar
+import com.liglig.base.BR
+import com.liglig.base.utils.ActivityManager
+import com.liglig.base.view.IBaseView
+import java.lang.reflect.Method
+import java.lang.reflect.ParameterizedType
+import java.lang.reflect.Type
+
+/**
+ * created by liglig on 2021/4/9 0009
+ * Description: BaseActivity
+ */
+abstract class BaseActivity<VB : ViewDataBinding> : AppCompatActivity() ,
+    IBaseView  {
+
+    lateinit var binding: VB
+    val mHandler: Handler = Handler(Looper.getMainLooper())
+
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        //统一设置activity竖屏
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        super.onCreate(savedInstanceState)
+        initDataBinding()
+
+        ActivityManager.addActivity(this) //创建Activity入栈管理
+
+        statusBaySetting()
+
+        initView()
+        initData()
+    }
+
+
+    //封装反射ViewBind
+    open fun initDataBinding() {
+        val type: Type = this.javaClass.genericSuperclass
+        if (type is ParameterizedType) {
+            //如果支持泛型
+            try {
+                //获得泛型中的实际类型，可能会存在多个泛型，[0]也就是获得T的type
+                val clazz: Class<VB> =
+                    (type as ParameterizedType).actualTypeArguments[0] as Class<VB>
+                //反射inflate
+                val method: Method = clazz.getMethod("inflate", LayoutInflater::class.java)
+                //方法调用，获得ViewBinding实例
+                binding = method.invoke(null, layoutInflater) as VB
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            assert(binding != null)
+            setContentView(binding.root)
+        }
+    }
+
+
+    /**
+     * activity系统状态栏封装，并设置默认样式
+     */
+    open fun statusBaySetting() {
+        lifecycle.addObserver(object : LifecycleObserver {
+            @OnLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            fun onCreate() {
+                ImmersionBar.with(this@BaseActivity)
+                    .statusBarColor(setStatusBarColor())
+                    .statusBarDarkFont(isDarkFont())
+                    .fitsSystemWindows(true)
+                    .init()
+            }
+        })
+    }
+
+    protected abstract fun setStatusBarColor():Int
+
+    /**
+     * 设置状态栏颜色，默认黑色
+     */
+    open fun isDarkFont(): Boolean = true
+
+    override fun onDestroy() {
+        super.onDestroy()
+        ActivityManager.removeActivity(this) //销毁Activity移出栈
+    }
+}
